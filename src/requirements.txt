@@ -1,0 +1,22 @@
+# DIGI4ECO Requirements
+# Core dependencies for the DIGI4ECO blockchain data storage system
+
+# Blockchain and Ethereum
+web3==7.8.0
+eth-utils>=5.0.0
+
+# API Framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+
+# HTTP and File Handling
+requests==2.31.0
+python-multipart==0.0.6
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+
+# Development and deployment tooling
+# Install the solc 0.8.0 compiler separately (see README); no pip package provided.

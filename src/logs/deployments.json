@@ -1,0 +1,86 @@
+[
+  {
+    "timestamp": "2025-09-01T10:28:46.243735",
+    "contract_address": "0x9a3DBCa554e9f6b9257aAa24010DA8377C57c17e",
+    "success": true,
+    "error_message": null,
+    "solc_version": "Version: 0.8.0+commit.c7dfd78e.Darwin.appleclang"
+  },
+  {
+    "timestamp": "2025-11-03T11:10:45.069016",
+    "contract_address": "",
+    "success": false,
+    "error_message": "deployment failed",
+    "solc_version": "Version: 0.8.0+commit.c7dfd78e.Darwin.appleclang"
+  },
+  {
+    "timestamp": "2025-11-03T11:14:10.615866",
+    "contract_address": "0x05d91B9031A655d08E654177336d08543ac4B711",
+    "success": false,
+    "error_message": "tests failed",
+    "solc_version": "Version: 0.8.0+commit.c7dfd78e.Darwin.appleclang"
+  },
+  {
+    "timestamp": "2025-11-03T11:17:24.723130",
+    "contract_address": "",
+    "success": false,
+    "error_message": "deployment failed",
+    "solc_version": "Version: 0.8.0+commit.c7dfd78e.Darwin.appleclang"
+  },
+  {
+    "timestamp": "2025-11-03T11:17:36.199679",
+    "contract_address": "",
+    "success": false,
+    "error_message": "deployment failed",
+    "solc_version": "Version: 0.8.0+commit.c7dfd78e.Darwin.appleclang"
+  },
+  {
+    "timestamp": "2025-11-03T11:17:39.083890",
+    "contract_address": "",
+    "success": false,
+    "error_message": "deployment failed",
+    "solc_version": "Version: 0.8.0+commit.c7dfd78e.Darwin.appleclang"
+  },
+  {
+    "timestamp": "2025-11-03T11:17:49.571442",
+    "contract_address": "",
+    "success": false,
+    "error_message": "deployment failed",
+    "solc_version": "Version: 0.8.0+commit.c7dfd78e.Darwin.appleclang"
+  },
+  {
+    "timestamp": "2025-11-03T11:26:46.777571",
+    "contract_address": "0x42699A7612A82f1d9C36148af9C77354759b210b",
+    "success": false,
+    "error_message": "tests failed",
+    "solc_version": "Version: 0.8.0+commit.c7dfd78e.Darwin.appleclang"
+  },
+  {
+    "timestamp": "2025-11-03T18:55:30.726983",
+    "contract_address": "0xFD91E0b48787A75f2CC76eF412ceDEd075e2AE11",
+    "success": false,
+    "error_message": "tests failed",
+    "solc_version": "Version: 0.8.0+commit.c7dfd78e.Darwin.appleclang"
+  },
+  {
+    "timestamp": "2025-11-03T19:10:10.616891",
+    "contract_address": "0x254751E7101e773025E6b15E33836FE434f31C77",
+    "success": false,
+    "error_message": "tests failed",
+    "solc_version": "Version: 0.8.0+commit.c7dfd78e.Darwin.appleclang"
+  },
+  {
+    "timestamp": "2025-11-24T08:55:18.322148",
+    "contract_address": "0x79A1070721a76fc8491A9A180f593BFceF054b26",
+    "success": true,
+    "error_message": null,
+    "solc_version": "solc, the solidity compiler commandline interface"
+  },
+  {
+    "timestamp": "2025-11-24T09:02:38.099675+00:00",
+    "contract_address": "0xecA47C1FF233d43cbA79811D57653E9Db2aF6c73",
+    "success": true,
+    "error_message": null,
+    "solc_version": "solc, the solidity compiler commandline interface"
+  }
+]

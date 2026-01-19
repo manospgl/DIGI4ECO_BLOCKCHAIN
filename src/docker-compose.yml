@@ -1,0 +1,24 @@
+services:
+  digi4eco-api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - PROVIDER_URL=http://host.docker.internal:8545
+      - CONTRACT_ADDRESS=${CONTRACT_ADDRESS:-0x0000000000000000000000000000000000000000}
+    volumes:
+      - ./logs:/app/logs
+      - ./private_key.txt:/app/private_key.txt:ro
+    networks:
+      - digi4eco-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  digi4eco-network:
+    driver: bridge 
