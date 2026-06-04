@@ -1,0 +1,10 @@
+[Unit]
+Description=Run DIGI4ECO Besu Resource Monitoring Service every hour
+Requires=besu-monitor.service
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -170,6 +170,7 @@ curl http://localhost:8000/health
 
 - **Main Guide**: `src/README.md` - Detailed setup and usage instructions
 - **Deployment Guide**: `src/DEPLOYMENT.md` - Complete deployment documentation
+- **Besu Monitoring**: `monitoring/besu-monitoring/README.md` - Append-only host and container usage logging
 
 ---
 
@@ -182,6 +183,7 @@ curl http://localhost:8000/health
 - **Automated Deployment**: Complete pipeline for compilation, deployment, and verification
 - **Client Libraries**: Python client for programmatic access
 - **Health Monitoring**: Built-in health checks and monitoring
+- **Resource Monitoring**: Append-only Besu host/container metrics for historical usage tracking
 
 ## 🌐 **Network Configuration**
 

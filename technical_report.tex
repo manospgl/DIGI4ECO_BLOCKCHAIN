@@ -1,0 +1,681 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{amsmath,amssymb}
+\usepackage{enumitem}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{titlesec}
+
+\geometry{margin=1in}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    urlcolor=blue,
+    citecolor=blue
+}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  columns=fullflexible,
+  keepspaces=true
+}
+
+\titleformat{\section}{\large\bfseries}{\thesection}{0.5em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{0.5em}{}
+\titleformat{\subsubsection}{\normalsize\itshape}{\thesubsubsection}{0.5em}{}
+
+\title{Technical Report on the DIGI4ECO Blockchain Data Storage Backend}
+\author{
+  Stamatis Papangelou\textsuperscript{1} \\
+  Elias Iosif\textsuperscript{1} \\[0.5em]
+  \textsuperscript{1}Institute For the Future, University of Nicosia
+}
+\date{\today}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\section{Introduction}
+
+This technical report documents the design, implementation, and evolution of the blockchain-based data storage backend developed for the DIGI4ECO project, with a particular focus on the current implementation maintained in this repository.
+
+The backend adopts a deliberately minimalist on-chain data model that stores only:
+
+\begin{itemize}[noitemsep]
+  \item a sequential \textbf{blockchainId} allocated by the smart contract,
+  \item a caller-provided \textbf{dataId} that references an off-chain dataset,
+  \item a \textbf{checksum} integrity hash that validates the off-chain payload.
+\end{itemize}
+
+All richer metadata (URLs, timestamps, descriptive text, etc.) are kept off-chain and linked via the \texttt{dataId} and \texttt{checksum}. This design minimizes on-chain storage, reduces costs and complexity, and aligns with privacy and data protection requirements.
+
+The report consolidates the full technical narrative: earlier experiments with richer smart contracts, the transition to a streamlined, minimal design, the Hyperledger Besu network configuration, the Python/Web3 tooling, the FastAPI REST interface, Dockerization, and the testing and troubleshooting methodology. The focus is on the current \texttt{src} implementation, which represents the latest, cleaned-up version of the backend.
+
+\section{Project Objectives and Requirements}
+
+\subsection{Functional Objectives}
+
+The blockchain backend is designed to satisfy the following functional requirements:
+
+\begin{itemize}[noitemsep]
+  \item Provide an immutable anchor for off-chain environmental and project-related data.
+  \item Maintain a link from the blockchain to external datasets via a stable \texttt{dataId}.
+  \item Allow external systems to record a cryptographic \texttt{checksum} of off-chain payloads.
+  \item Support simple storage and retrieval flows through a smart contract API.
+  \item Expose high-level REST endpoints for clients that should not manage Web3 interactions directly.
+\end{itemize}
+
+\subsection{Non-Functional Requirements}
+
+The non-functional requirements that guided the design are:
+
+\begin{itemize}[noitemsep]
+  \item \textbf{Minimal on-chain footprint}: store only the information strictly required for integrity and linkage.
+  \item \textbf{Cost efficiency}: use a private Besu network, avoiding gas costs and variability of public chains.
+  \item \textbf{Reproducibility}: provide a self-contained \texttt{src} directory that can be deployed from scratch.
+  \item \textbf{Maintainability}: clean, documented Python code and a small, well-understood contract.
+  \item \textbf{Performance}: support multiple transactions per block and optional non-blocking writes.
+\end{itemize}
+
+\section{System Overview}
+
+The current DIGI4ECO blockchain data storage backend consists of the following components:
+
+\begin{itemize}[noitemsep]
+  \item A private Hyperledger Besu network (QBFT) providing the execution environment.
+  \item A Solidity smart contract (\texttt{DIGI4ECO.sol}) implementing a minimal triple:
+        \begin{itemize}
+          \item \texttt{blockchainId} (on-chain sequential ID),
+          \item \texttt{dataId} (off-chain reference),
+          \item \texttt{checksum} (integrity hash).
+        \end{itemize}
+  \item A Python toolchain in \texttt{src}:
+        \begin{itemize}
+          \item \texttt{compiler.py} for compiling the contract into ABI and bytecode,
+          \item \texttt{deploy\_contract.py} for network deployment and logging,
+          \item \texttt{data\_storage\_client.py} as a Web3 helper.
+        \end{itemize}
+  \item A FastAPI service (\texttt{api.py}) exposing a minimal REST API:
+        \begin{itemize}
+          \item \texttt{POST /store} to record a new reference and checksum,
+          \item \texttt{GET /data/\{blockchain\_id\}} to retrieve the stored triple,
+          \item \texttt{GET /health} for Docker health checks.
+        \end{itemize}
+  \item Docker integration:
+        \begin{itemize}
+          \item \texttt{Dockerfile} for containerizing the API,
+          \item \texttt{docker-compose.yml} and \texttt{docker\_run.sh} for orchestration and health checks.
+        \end{itemize}
+  \item Logs and configuration:
+        \begin{itemize}
+          \item \texttt{logs/deployments.json} for deployment traceability,
+          \item \texttt{logs/test\_results.json} for API test runs,
+          \item \texttt{requirements.txt} for Python dependencies,
+          \item \texttt{sc\_abi.json} and \texttt{sc\_bytecode.bin} for compiled artifacts.
+        \end{itemize}
+\end{itemize}
+
+The current implementation of the backend lives in the repository's \texttt{src} directory:
+
+\begin{lstlisting}
+src
+├── api.py
+├── compiler.py
+├── data_storage_client.py
+├── deploy_contract.py
+├── DIGI4ECO.sol
+├── docker_run.sh
+├── docker-compose.yml
+├── Dockerfile
+├── logs/
+│   ├── deployments.json
+│   └── test_results.json
+├── README.md
+├── requirements.txt
+├── sc_abi.json
+├── sc_bytecode.bin
+└── venv/   # optional local virtual environment
+\end{lstlisting}
+
+\section{Private Besu Network Setup}
+
+The network setup remains as described in the earlier versions of the backend: a private Hyperledger Besu network generated using the \texttt{quorum-dev-quickstart} utility, with customizations for block time, RPC APIs, transaction pool parameters, and resource usage.
+
+\subsection{Using quorum-dev-quickstart}
+
+The network is created with:
+
+\begin{lstlisting}
+npx quorum-dev-quickstart
+\end{lstlisting}
+
+During the interactive wizard, the following answers are used in order to obtain a Besu-based network that matches the DIGI4ECO requirements (no private transactions, lightweight logging, no extra explorers):
+
+\begin{lstlisting}
+Which Ethereum client would you like to run? Default: [1]
+  1. Hyperledger Besu
+
+Do you wish to enable support for private transactions? [Y/n]
+  n
+
+Do you wish to enable support for logging with Loki, Splunk or ELK (Elasticsearch, Logstash & Kibana)? Default: [1]
+  1. Loki
+
+Do you wish to enable support for monitoring your network with Chainlens? [N/y]
+  n
+
+Do you wish to enable support for monitoring your network with Blockscout? [N/y]
+  n
+
+Where should we create the config files for this network? (Default: ./quorum-test-network)
+  [Press Enter or specify your path]
+\end{lstlisting}
+
+This configuration selects Hyperledger Besu as the client, disables private transactions and Blockscout/Chainlens, and keeps only Loki-based logging for lightweight observability. The files are typically created in \texttt{./quorum-test-network}, unless a custom path is specified.
+
+After generation, the output directory contains a \texttt{docker-compose.yml} and configuration files for Besu. A typical startup sequence is:
+
+\begin{lstlisting}
+cd quorum-test-network
+./run.sh
+\end{lstlisting}
+
+\subsection{Besu Configuration Adjustments}
+
+\textbf{Only in the case you have permission issues:} in the generated \texttt{docker-compose.yml}, the Besu entrypoint can be adapted to reference the QBFT genesis file directly and to enable the necessary RPC APIs:
+
+\begin{lstlisting}
+x-besu-def:
+  &besu-def
+  restart: "on-failure"
+  image: hyperledger/besu:${BESU_VERSION:-latest}
+  env_file:
+    - ./config/besu/.env
+  entrypoint:
+    - /bin/bash
+    - -c
+    - |
+      /opt/besu/bin/besu \
+      --config-file=/config/config.toml \
+      --genesis-file=/config/${BESU_CONS_ALGO:-QBFT}genesis.json \
+      --p2p-host=$$(hostname -i) \
+      --rpc-http-api=EEA,WEB3,ETH,NET,TRACE,DEBUG,ADMIN,TXPOOL,PERM,${BESU_CONS_ALGO:-QBFT} \
+      --rpc-ws-api=EEA,WEB3,ETH,NET,TRACE,DEBUG,ADMIN,TXPOOL,PERM,${BESU_CONS_ALGO:-QBFT}
+\end{lstlisting}
+
+The block period in the QBFT genesis file (e.g.\ \texttt{config/besu/QBFTgenesis.json}) can be increased to reduce resource usage:
+
+\begin{lstlisting}
+"blockperiodseconds": 40,
+\end{lstlisting}
+
+This lowers disk growth and CPU utilization while still providing adequate latency for registering data references.
+
+\subsection{Transaction Pool Configuration}
+
+To increase the number of transactions accepted from a single address per block and improve bulk write performance, the Besu transaction pool configuration can be tuned in the Besu configuration file (for example \texttt{config/besu/config.toml}):
+
+\begin{lstlisting}
+# Allow more transactions per account
+# This is a percentage value (0.001 = 0.1% of pool)
+# Set to a higher value to allow more transactions from the same sender
+tx-pool-limit-by-account-percentage=0.5
+
+# Also increase the total pool size
+tx-pool-max-size=8000
+\end{lstlisting}
+
+By default, the percentage limit for a single account is relatively low, which restricts how many pending transactions can originate from the same sender within the pool. Increasing \texttt{tx-pool-limit-by-account-percentage} and \texttt{tx-pool-max-size} allows a higher number of transactions from one address to be included across blocks, which is important for DIGI4ECO use cases where a single service account may submit many anchoring transactions in bursts.
+
+\subsection{Key Management Note}
+
+For development and testing, the private key used by the deployment and client scripts is often the one associated with a pre-funded account defined in the initial block header (genesis file) and visible in the Besu configuration.
+
+In order \emph{not} to use this default address in more realistic scenarios, there are two safer approaches:
+
+\begin{itemize}[noitemsep]
+  \item Generate a new key pair, add the corresponding address to the genesis configuration (with an initial ETH allocation), and redeploy the network.
+  \item Alternatively, use one of the pre-funded genesis accounts only to transfer ETH to a newly generated address, and configure the backend (deployment scripts, API) to use the new private key. In this way, the private key of the original genesis account never needs to be embedded or exposed in the DIGI4ECO backend code.
+\end{itemize}
+
+This separation is recommended for improved security, especially if the codebase is shared among partners or deployed on shared infrastructure.
+
+\section{Smart Contract Design}
+
+\subsection{Minimal On-Chain Data Model}
+
+The smart contract used in the DIGI4ECO backend implements an intentionally minimal structure. For each successfully stored entry, the following triple is recorded:
+
+\begin{itemize}[noitemsep]
+  \item \textbf{blockchainId} (\texttt{uint256}): a sequential identifier allocated by the contract; this is the primary key for on-chain lookup.
+  \item \textbf{dataId} (\texttt{uint256}): a caller-provided reference back to the off-chain dataset (e.g.\ primary key in a database, sensor ID plus sequence number, etc.).
+  \item \textbf{checksum} (\texttt{string}): a hash or digest of the off-chain payload (e.g.\ SHA-256, Blake2, etc.), used to verify integrity.
+\end{itemize}
+
+No descriptive fields, timestamps, URLs, or metadata are stored on-chain in this design. The blockchain acts purely as a tamper-evident register of references and checksums.
+
+\subsection{Core Interface}
+
+The core contract logic provides:
+
+\begin{itemize}[noitemsep]
+  \item A \textbf{storeData} function that accepts a \texttt{dataId} and \texttt{checksum}, allocates a new \texttt{blockchainId}, persists the triple, and emits an event.
+  \item A \textbf{getData} function that returns the triple associated with a given \texttt{blockchainId}.
+  \item A \textbf{DataStored} event of the form:
+        \[
+          \texttt{DataStored(blockchainId, dataId, checksum)}
+        \]
+\end{itemize}
+
+The event can be used by off-chain services to track successful writes and to build secondary indices or notifications.
+
+\subsection{Comparison with Earlier Rich-Record Prototype}
+
+Earlier versions of the DIGI4ECO contract stored additional information such as \texttt{source}, \texttt{timestamp}, \texttt{related\_url}, \texttt{metadata}, and a \texttt{public} flag. While this provided a rich on-chain data model, it also increased storage consumption, complexity, and potential privacy risks.
+
+The current design represents a deliberate simplification, where:
+
+\begin{itemize}[noitemsep]
+  \item all rich metadata is kept off-chain,
+  \item the blockchain only retains what is strictly necessary to:
+        \begin{enumerate}[noitemsep]
+          \item link to the off-chain record (\texttt{dataId}),
+          \item verify the payload (\texttt{checksum}),
+          \item identify the on-chain record (\texttt{blockchainId}).
+        \end{enumerate}
+\end{itemize}
+
+This evolution is important for the technical narrative: the project moved from an exploratory, rich-contract design to a minimal, production-oriented anchoring mechanism.
+
+\section{Compiler Tooling and Solidity Environment}
+
+\subsection{Solidity Compilation}
+
+The DIGI4ECO backend uses a standalone \texttt{compiler.py} script. The standard usage is:
+
+\begin{lstlisting}
+cd src
+python3 compiler.py
+\end{lstlisting}
+
+This script reads \texttt{DIGI4ECO.sol} and produces:
+
+\begin{itemize}[noitemsep]
+  \item \texttt{sc\_abi.json}: the contract's ABI,
+  \item \texttt{sc\_bytecode.bin}: the compiled bytecode.
+\end{itemize}
+
+\subsection{Solc Version Management}
+
+The repository targets Solidity \texttt{0.8.0}. The recommended setup is to install and use \texttt{solc-select}:
+
+\begin{lstlisting}
+pip3 install solc-select
+solc-select install 0.8.0
+solc-select use 0.8.0
+export PATH="$(python3 -m site --user-base)/bin:$PATH"
+\end{lstlisting}
+
+\subsection{Apple Silicon Considerations}
+
+On Apple Silicon (M1/M2/M3) macOS systems, pre-0.8.24 \texttt{solc} binaries are Intel-only. If \texttt{compiler.py} fails due to binary incompatibility, there are two options:
+
+\begin{enumerate}[noitemsep]
+  \item Install Rosetta and run the Intel binary:
+        \begin{lstlisting}
+softwareupdate --install-rosetta
+        \end{lstlisting}
+  \item Compile the contract in Remix, then copy the ABI and bytecode into the generated files:
+        \begin{itemize}
+          \item \texttt{sc\_abi.json},
+          \item \texttt{sc\_bytecode.bin}.
+        \end{itemize}
+\end{enumerate}
+
+These steps are documented in the project README to ensure cross-platform reproducibility.
+
+\section{Deployment Toolchain}
+
+\subsection{Deploying the Contract}
+
+The deployment script \texttt{deploy\_contract.py} in \texttt{src} handles contract deployment to the target Besu network. The typical workflow is:
+
+\begin{lstlisting}
+cd src
+python3 deploy_contract.py
+\end{lstlisting}
+
+Upon success, the script prints the deployed address, e.g.:
+
+\begin{lstlisting}
+Contract deployed at address: 0x1234...
+\end{lstlisting}
+
+The script also records deployment metadata (timestamp, address, \texttt{solc} version, success state) in \texttt{logs/deployments.json} to support traceability.
+
+\subsection{Configuring the API with the Deployed Address}
+
+The contract address is configured primarily via an environment variable:
+
+\begin{lstlisting}
+export CONTRACT_ADDRESS=0xYOUR_DEPLOYED_ADDRESS
+\end{lstlisting}
+
+Alternatively, the default value in \texttt{api.py} can be edited. The provider URL can also be overridden if the node is not reachable at \texttt{http://localhost:8545}:
+
+\begin{lstlisting}
+export PROVIDER_URL=http://your-node:8545
+\end{lstlisting}
+
+Correct configuration of \texttt{CONTRACT\_ADDRESS} and \texttt{PROVIDER\_URL} is essential to avoid \texttt{InvalidAddress} or connectivity errors when the API initializes.
+
+\subsection{Automated Docker Deployment}
+
+The repository includes an automation script, \texttt{docker\_run.sh}, which performs a full Docker deployment:
+
+\begin{itemize}[noitemsep]
+  \item stops any existing containers,
+  \item builds the API image,
+  \item starts the container via \texttt{docker-compose},
+  \item performs a \texttt{/health} check to validate readiness.
+\end{itemize}
+
+This is the recommended deployment path for local testing and consistent execution environments.
+
+\section{Python Client: \texttt{data\_storage\_client.py}}
+
+\subsection{Client Responsibilities}
+
+The Python client used by the DIGI4ECO backend is a lightweight Web3 helper used by the API and any standalone scripts. Its responsibilities are:
+
+\begin{itemize}[noitemsep]
+  \item maintain a connection to the Besu node at \texttt{PROVIDER\_URL},
+  \item load the ABI from \texttt{sc\_abi.json} and the contract address from configuration,
+  \item sign transactions using a private key stored in \texttt{private\_key.txt},
+  \item expose a small set of methods for storing and retrieving entries.
+\end{itemize}
+
+\subsection{Store Interface}
+
+The core client method for writes is:
+
+\begin{lstlisting}
+blockchain_id, data_id, checksum, tx_hash = client.store_data(
+    data_id=123,
+    checksum="deadbeef",
+    wait_for_receipt=True
+)
+\end{lstlisting}
+
+The method:
+
+\begin{itemize}[noitemsep]
+  \item invokes the contract's \texttt{storeData} function with \texttt{dataId} and \texttt{checksum},
+  \item supports non-blocking submission when \texttt{wait\_for\_receipt=False},
+  \item uses the pending nonce for concurrency to enable multiple transactions per block,
+  \item returns a tuple of:
+        \begin{itemize}
+          \item \texttt{blockchain\_id} (on-chain allocated ID, when waiting),
+          \item \texttt{data\_id} (the caller-provided reference),
+          \item \texttt{checksum} (as stored),
+          \item \texttt{tx\_hash} (transaction hash).
+        \end{itemize}
+\end{itemize}
+
+This tuple provides all information needed by the calling system to link its own data with the on-chain record and to log the transaction.
+
+\section{FastAPI REST Interface}
+
+\subsection{Design and Endpoints}
+
+The FastAPI service in \texttt{api.py} is a thin wrapper around the \texttt{DataStorageClient}. It exposes the following endpoints:
+
+\begin{description}[noitemsep]
+  \item[\texttt{POST /store}] store a new \texttt{(dataId, checksum)} pair and return the resulting triple.
+  \item[\texttt{GET /data/\{blockchain\_id\}}] retrieve the stored triple for a given \texttt{blockchainId}.
+  \item[\texttt{GET /health}] basic node/API health check for container readiness.
+\end{description}
+
+\subsection{Example Usage}
+
+\subsubsection{Store Data}
+
+\begin{lstlisting}
+curl -X POST http://127.0.0.1:8000/store \
+  -H "Content-Type: application/json" \
+  -d '{
+        "data_id": 987654321,
+        "checksum": "a4c0f6f8eed97e8866f7a9d10f8216c3efd6191a4f0bfe88794ec19fef9f35b3"
+      }'
+\end{lstlisting}
+
+Successful response:
+
+\begin{lstlisting}
+{
+  "tx_hash": "0x...",
+  "blockchain_id": 42,
+  "data_id": 987654321,
+  "checksum": "a4c0f6f8eed97e8866f7a9d10f8216c3efd6191a4f0bfe88794ec19fef9f35b3",
+  "success": true
+}
+\end{lstlisting}
+
+\subsubsection{Retrieve Data}
+
+\begin{lstlisting}
+curl http://127.0.0.1:8000/data/42
+\end{lstlisting}
+
+Response:
+
+\begin{lstlisting}
+{
+  "blockchain_id": 42,
+  "data_id": 987654321,
+  "checksum": "a4c0f6f8eed97e8866f7a9d10f8216c3efd6191a4f0bfe88794ec19fef9f35b3"
+}
+\end{lstlisting}
+
+These endpoints are sufficient for the current implementation: they allow external systems to register off-chain data references and validate them later by checking the stored checksum.
+
+\subsection{API Configuration and Execution}
+
+\subsubsection{Running Locally}
+
+After configuring the Python environment (Section~\ref{sec:python-env}), the API is started with:
+
+\begin{lstlisting}
+cd src
+python3 api.py
+\end{lstlisting}
+
+By default, it listens on \texttt{http://127.0.0.1:8000}.
+
+\subsubsection{Running via Docker}
+
+A convenience wrapper is provided:
+
+\begin{lstlisting}
+cd src
+./docker_run.sh
+\end{lstlisting}
+
+Under the hood, this uses \texttt{docker-compose.yml} to build and run the API container. Environment variables such as \texttt{CONTRACT\_ADDRESS} and \texttt{PROVIDER\_URL} can be injected via Docker Compose configuration.
+
+\section{Dockerization and Orchestration}
+
+\subsection{Dockerfile}
+
+The \texttt{Dockerfile} in \texttt{src} builds an image that:
+
+\begin{itemize}[noitemsep]
+  \item installs dependencies from \texttt{requirements.txt},
+  \item installs \texttt{solc-select} and \texttt{solc} \texttt{0.8.0},
+  \item copies the source files of the DIGI4ECO backend into the container,
+  \item exposes the FastAPI service via Uvicorn.
+\end{itemize}
+
+\subsection{docker-compose.yml}
+
+The \texttt{docker-compose.yml} file defines a service for the API which:
+
+\begin{itemize}[noitemsep]
+  \item maps the internal port (8000) to a host port,
+  \item passes environment variables (contract address, provider URL),
+  \item mounts the logs directory and \texttt{private\_key.txt},
+  \item defines an HTTP health check.
+\end{itemize}
+
+Common commands are:
+
+\begin{lstlisting}
+# Start container
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop
+docker-compose down
+\end{lstlisting}
+
+These commands can be wrapped by \texttt{docker\_run.sh} for convenience.
+
+\section{Python Environment and Dependencies}
+\label{sec:python-env}
+
+\subsection{Virtual Environment}
+
+The recommended setup for the DIGI4ECO backend is:
+
+\begin{lstlisting}
+cd src
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+\end{lstlisting}
+
+The \texttt{venv/} directory is included in the structure as an optional local virtual environment.
+
+\subsection{Core Dependencies}
+
+Key dependencies listed in \texttt{requirements.txt} include:
+
+\begin{itemize}[noitemsep]
+  \item \texttt{web3}: Ethereum client library for Python.
+  \item \texttt{fastapi}: API framework.
+  \item \texttt{uvicorn[standard]}: ASGI server.
+  \item \texttt{pydantic}: request/response validation.
+  \item \texttt{requests}: HTTP client for tests and utilities.
+\end{itemize}
+
+These ensure that the backend can be run and tested in a self-contained way from within \texttt{src}.
+
+\section{Troubleshooting}
+
+The project documentation includes concise troubleshooting guidance which is integrated here.
+
+\subsection{Compilation Issues on macOS Apple Silicon}
+
+\textbf{Symptom:} \texttt{compiler.py} fails due to incompatible \texttt{solc} binary.
+
+\textbf{Resolution:}
+
+\begin{itemize}[noitemsep]
+  \item Install Rosetta and retry, or
+  \item Compile \texttt{DIGI4ECO.sol} in Remix and copy ABI/bytecode into \texttt{sc\_abi.json} and \texttt{sc\_bytecode.bin}.
+\end{itemize}
+
+\subsection{Node Connectivity Errors}
+
+\textbf{Symptom:} \texttt{ConnectionError: Failed to connect to the Ethereum node.}
+
+\textbf{Resolution:}
+
+\begin{itemize}[noitemsep]
+  \item Ensure that the Besu node is running and reachable at \texttt{PROVIDER\_URL}.
+  \item Confirm that the account used for transactions is unlocked or has an accessible private key.
+\end{itemize}
+
+\subsection{Transactions Stuck in Pending}
+
+\textbf{Symptom:} Transactions remain in \texttt{pending} state.
+
+\textbf{Resolution:}
+
+\begin{itemize}[noitemsep]
+  \item Confirm that the sending account has sufficient ETH on the target network.
+  \item Check gas price and gas limit configuration.
+  \item Verify that the Besu network is producing blocks (e.g.\ block period not misconfigured).
+\end{itemize}
+
+\subsection{Invalid Contract Address}
+
+\textbf{Symptom:} API or client raises \texttt{InvalidAddress} or similar errors.
+
+\textbf{Resolution:}
+
+\begin{itemize}[noitemsep]
+  \item Re-deploy the contract and copy the printed address carefully.
+  \item Set \texttt{CONTRACT\_ADDRESS} as an environment variable and restart the API.
+  \item Inspect \texttt{logs/deployments.json} for the latest known good address.
+\end{itemize}
+
+\section{Current Status and Outlook}
+
+\subsection{Current Status}
+
+The DIGI4ECO backend provides:
+
+\begin{itemize}[noitemsep]
+  \item a private Besu network configuration suited to low-frequency anchoring,
+  \item a minimal smart contract storing \texttt{(blockchainId, dataId, checksum)},
+  \item a small, well-defined Python/Web3 client with non-blocking support,
+  \item a FastAPI service with \texttt{POST /store}, \texttt{GET /data/\{blockchain\_id\}}, and \texttt{GET /health},
+  \item Dockerized API deployment with health checks and a \texttt{docker\_run.sh} wrapper,
+  \item basic logging and troubleshooting guidance.
+\end{itemize}
+
+This implementation is intentionally lean and focused on being a reference architecture that can be integrated into larger DIGI4ECO workflows.
+
+\subsection{Future Directions}
+
+Possible extensions include:
+
+\begin{itemize}[noitemsep]
+  \item building additional services around the stored references (e.g.\ audit dashboards),
+  \item integrating the backend with higher-level DIGI4ECO data pipelines and federated services,
+  \item defining standardized checksum schemes and dataId formats per use case,
+  \item revisiting richer on-chain metadata for specific narrowly scoped scenarios where it is justified,
+  \item hardening security, key management, and access control for production deployments.
+\end{itemize}
+
+\section*{Conclusion}
+
+This report has presented a detailed account of the DIGI4ECO blockchain data storage backend, updated to reflect the latest design in \texttt{src}. The system combines a minimal smart contract, a lightweight Python client, a FastAPI REST layer, and Docker-based deployment on a private Besu network. By anchoring only the essential identifiers and checksums on-chain, the backend achieves a balance between integrity, privacy, and operational simplicity, while remaining extensible for future DIGI4ECO developments.
+
+\section*{Author Contributions}
+
+This technical report, as well as the development of the DIGI4ECO blockchain data storage backend, is the result of a collaborative effort by members of the Institute For the Future, University of Nicosia.
+
+\textbf{Elias Iosif} contributed through the conceptualisation of the system, high-level architectural design, strategic project coordination, and overall management of the development. His direction shaped the system requirements, technical scope, and integration strategy within the broader DIGI4ECO ecosystem.
+
+\textbf{Stamatis Papangelou} contributed through the full-stack backend development and technical execution of the first version, including the implementation of the smart contract, Web3 client, Python backend, Besu network configuration, REST API, Docker orchestration, testing suite, deployment methodologies, and the overall documentation. He led the development, optimisation, and practical integration of the backend system.
+
+Both authors participated in reviewing, improving, and approving the final version of this report.
+
+\section*{Funding}
+
+This work was partially funded by the European Union through the DIGI4ECO project, grant agreement ID: \textbf{101112883}.
+
+\end{document}

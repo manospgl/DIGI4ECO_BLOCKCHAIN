@@ -1,0 +1,17 @@
+[Unit]
+Description=DIGI4ECO Besu Resource Monitoring Service
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=oneshot
+User=__SERVICE_USER__
+Group=__SERVICE_GROUP__
+WorkingDirectory=__INSTALL_DIR__
+Environment=BESU_MONITOR_LOG_DIR=__INSTALL_DIR__/logs
+ExecStart=__INSTALL_DIR__/venv/bin/python __INSTALL_DIR__/besu_monitor.py
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
